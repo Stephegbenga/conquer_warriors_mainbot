@@ -1,5 +1,9 @@
 import requests
-bot_token = "6083717950:AAFk6XbfotFmaKyXSkDNGdTlw9N9rbYrq50"
+from dotenv import load_dotenv
+load_dotenv()
+import os
+
+bot_token=os.environ.get('bot_token')
 
 
 class Telegram:
