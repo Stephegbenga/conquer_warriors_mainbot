@@ -1,0 +1,12 @@
+test
+config.py
+__pycache__
+*.pyc
+.idea
+*__pycache__
+.aws
+.env
+zappa_settings.json
+venv
+update_note.txt
+data_formats
