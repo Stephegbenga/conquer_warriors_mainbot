@@ -1,13 +1,30 @@
 from controllers.api_provider import Telegram, Intermediary_Bot
 from controllers.utils import timestamp, reformat_message, turn_variable_to_string_in_object,\
-    commands, lookup_prices, JsonTool, Local_Cache, get_sale_price
+    commands, lookup_prices, JsonTool, Local_Cache, get_sale_price, get_parmalink
 from controllers.payment import Payment
 from controllers.database import Users
 import json
 from dotenv import load_dotenv
 load_dotenv()
 import os
-intermediary_bot_id=os.environ.get('intermediary_bot_id')
+
+intermediary_username = os.getenv("intermediary_username")
+notification_telegram_id = os.getenv("notification_telegram_id")
+admin_userid=os.getenv("admin_userid")
+
+def is_intermediary(user_id):
+    intermediary_user_id = Local_Cache.get("intermediary_user_id")
+    if intermediary_user_id == user_id:
+        return True
+
+    user = Users.find_one({"id": user_id})
+    if user and user['username'] == intermediary_username:
+        Local_Cache.set("intermediary_user_id", user_id)
+        return True
+
+    return False
+
+
 
 def process_message(payload):
     try:
@@ -17,41 +34,93 @@ def process_message(payload):
             username = payload['chat']['username']
             message = payload.get("text")
 
-            if str(user_id) == str(intermediary_bot_id):
+            # if is a group do not work
+            if str(user_id) == str(notification_telegram_id):
+                return
+
+            if str(username) == str(intermediary_username):
                 payload = JsonTool.decrypt(message)
-                user_id = payload['user_id']
-                type = payload.get("type")
 
-                if type == "text":
-                    text = payload['text']
-                    if "our current lookup price list" in text.lower() or "please select which lookup" in text.lower():
-                        return
+                if payload:
+                    user_id = payload['user_id']
+                    type = payload.get("type")
 
-                    if "could not get a successful" in text.lower():
+                    if type == "text":
+                        text = payload['text']
+
+                        buttons = None
+                        if payload.get("buttons"):
+                            buttons = {'inline_keyboard': payload.get("buttons")}
+
+                        ignore_lists = ["our current lookup price list", "please select which lookup", "just deposited",
+                                         "account balance", "please select a payment method", "my balance", "have cancelled your lookup"]
+
+                        if "not have enough balance" in text.lower():
+                            message_payload = reformat_message(user_id, "Please bear with us, Our system is currently undergoing maintenance")
+                            Telegram.sendmessage(message_payload)
+
+                            notification_message = f"Our bot is currently low on funds"
+                            notification_message = reformat_message(notification_telegram_id, notification_message)
+                            Telegram.sendmessage(notification_message)
+
+                            return
+
+                        for ig in ignore_lists:
+                            if ig.lower() in text.lower():
+                                return
+
+                        if "could not get a successful" in text.lower():
+                            Local_Cache.delete("current_session")
+
+                        message_payload = reformat_message(user_id, text, buttons)
+                        Telegram.sendmessage(message_payload)
+                    else:
+                        content = payload['content']
+                        filename = payload['filename']
+                        Telegram.sendfile(user_id, filename, content)
+
                         Local_Cache.delete("current_session")
-                        Local_Cache.delete("last_lookup")
 
-                    message_payload = reformat_message(user_id, text)
-                    Telegram.sendmessage(message_payload)
+                        user = Users.find_one({"id": user_id})
+
+                        last_lookup = user.get("last_lookup")
+                        if not last_lookup:
+                            return
+
+                        last_lookup_price = lookup_prices.get(last_lookup)
+                        new_balance = user['balance'] - last_lookup_price
+
+                        new_total_lookups = user['total_lookups'] + 1
+
+                        Users.update_one({"id": user_id}, {"$set": {"balance": new_balance, "total_lookups": new_total_lookups}})
                 else:
-                    content = payload['content']
-                    filename = payload['filename']
-                    Telegram.sendfile(user_id, filename, content)
+                    # the message is a comamnd
+                    # admin_commands = ["withdraw", "check_address_with_funds"]
+                    if message == "/withdraw":
+                        Payment.withdraw()
+                        message = reformat_message(user_id, "Funds withdrawn")
+                        Telegram.sendmessage(message)
+                    elif message == "/balance":
+                        message = Payment.balance()
+                        message = reformat_message(user_id, message)
+                        Telegram.sendmessage(message)
+                    else:
+                        message = reformat_message(user_id, "Invalid command")
+                        Telegram.sendmessage(message)
 
-                    Local_Cache.delete("current_session")
 
-                    last_lookup = Local_Cache.get("last_lookup")
-                    if not last_lookup:
-                        return
 
-                    last_lookup_price = lookup_prices.get(last_lookup)
-                    user = Users.find({"id": user_id})
-                    new_balance = user['balance'] - last_lookup_price
-                    Users.update_one({"id": user_id}, {"$set": {"balance": new_balance}})
+                #check if the intermediary bot detail exist on the server, if not save it
+                check_user = Users.find_one({"id": user_id})
+                if not check_user:
+                    new_user = {"username": username, "id": user_id, "balance": 0, "total_lookups": 0,
+                                "created_at": timestamp(), "last_bot_message":"", "last_bot_message_step": 0, "percentage_bonus": 0 }
 
-                    Local_Cache.delete("last_lookup")
+                    Users.update_one({"id": new_user['id']}, {"$set": new_user}, upsert=True)
 
                 return
+
+
 
             current_session = Local_Cache.get("current_session")
             if not current_session:
@@ -64,6 +133,12 @@ def process_message(payload):
                                 "created_at": timestamp(), "last_bot_message":"", "last_bot_message_step": 0, "percentage_bonus": 0 }
 
                     Users.update_one({"id": new_user['id']}, {"$set": new_user}, upsert=True)
+
+
+                user_link = get_parmalink(user_id, user_id, "profile")
+                notification_message = f"user with id {user_link} started the bot"
+                notification_message = reformat_message(notification_telegram_id, notification_message, permalink=True)
+                Telegram.sendmessage(notification_message)
 
 
             payloads = commands.get(message)
@@ -84,25 +159,26 @@ def process_message(payload):
                 Telegram.sendmessage(new_payloads)
             else:
                 user = Users.find_one({"id": user_id})
-                accept_payment_messages = ["💴 Please enter your deposit amount in Chat! Min. Deposit is 10$",
-                                           "😖 You cannot deposit less than 10$! It should be 10$ or more",
-                                           "😖 You must only enter numbers to begin a deposit! Ex. 10 is 10$"]
+                accept_payment_messages = ["💴 Please enter your deposit amount in Chat! Min. Deposit is 10$", #"💴 Please enter your deposit amount in Chat! Min. Deposit is 10$
+                                          "😖 You cannot deposit less than 10$! It should be 10$ or more", #"😖 You cannot deposit less than 10$! It should be 10$ or more",
+                                           "😖 You must only enter numbers to begin a deposit! Ex. 10 is 10$"] # "😖 You must only enter numbers to begin a deposit! Ex. 10 is 10$"
 
                 # check if the last flow was make payment
                 if user['last_bot_message'] in accept_payment_messages:
                     if message.isdigit():
                         amount = int(message)
 
-                        if amount < 10:
-                            message_payload = reformat_message(user_id, "😖 You cannot deposit less than 10$! It should be 10$ or more")
+                        if amount < 1:
+                            message_payload = reformat_message(user_id, "😖 You cannot deposit less than 10$! It should be 10$ or more") #😖 You cannot deposit less than 10$! It should be 10$ or more
                             Telegram.sendmessage(message_payload)
                         else:
-                            # call the coinbase commerce to provide the bitcoin address
-                            charge = Coinbase.create_charge(user_id, amount)
-                            btc_amount = charge['data']['pricing']['bitcoin']['amount']
-                            btc_address = charge['data']['addresses']['bitcoin']
+                            selected_currency = user['selected_currency']
+                            charge = Payment.create_charge(user_id, amount, selected_currency)
+                            currency = charge['currency']
+                            amount = charge['amount']
+                            address = charge['address']
 
-                            message_payload = reformat_message(user_id, f"🎉 Your Unique Deposit has been created! See below.\n\n💴 BTC Address: {btc_address}\n💴 BTC Amount: {btc_amount}\n\n⏳ This Deposit Address will expire in the next 60 minutes counting from now.")
+                            message_payload = reformat_message(user_id, f"🎉 Your Unique Deposit has been created! See below.\n\n💴 {currency} Address: {address}\n💴 {currency} Amount: {amount}\n\n⏳ This Deposit Address will expire in the next 60 minutes counting from now.")
                             Telegram.sendmessage(message_payload)
 
                     else:
@@ -110,8 +186,19 @@ def process_message(payload):
                         Telegram.sendmessage(message_payload)
 
                 else:
-                    message_payload = {"user_id": user_id, "type":"text", "text": message}
-                    Intermediary_Bot.sendmessage(user_id, message_payload)
+
+                    if str(admin_userid) == str(user_id) and message == "/withdraw":
+                        Payment.withdraw()
+                        message = reformat_message(user_id, "Funds withdrawn")
+                        Telegram.sendmessage(message)
+                    elif str(admin_userid) == str(user_id) and  message == "/balance":
+                        message = Payment.balance()
+                        message = reformat_message(user_id, message)
+                        Telegram.sendmessage(message)
+                    else:
+                        message_payload = {"user_id": user_id, "type": "text", "text": message}
+                        Intermediary_Bot.sendmessage(user_id, message_payload)
+
 
 
 
@@ -120,27 +207,36 @@ def process_message(payload):
             user_id = payload['message']['chat']['id']
             username = payload['message']['chat']['username']
             clicked_button = payload['data']
+            message_id = payload['message']['message_id']
+            Telegram.deletemessage(user_id, message_id)
+
+            currencies = ["bitcoin", "litecoin", "eth_usdt", "tron_usdt", "ethereum"]
+
+            if clicked_button in currencies:
+                Users.update_one({"id": user_id}, {"$set": {"selected_currency": clicked_button}})
+                text = "💴 Please enter your deposit amount in Chat! Min. Deposit is 10$" # "💴 Please enter your deposit amount in Chat! Min. Deposit is 10$"
+                buttons = {'inline_keyboard':  [
+                    [{'text': '❌ Cancel Deposit', 'callback_data': 'cancel_deposit'}],
+                ]}
+
+                reformatted_payload = reformat_message(user_id, text, buttons)
+                Telegram.sendmessage(reformatted_payload)
 
 
-            if clicked_button == "cancel_lookup":
-                message_id = payload['message']['message_id']
-                Telegram.deletemessage(user_id, message_id)
-
+            elif clicked_button == "cancel_lookup":
                 message_payload = reformat_message(user_id, "😑 You have cancelled your lookup request!")
                 Telegram.sendmessage(message_payload)
 
+                payload = {"user_id":user_id, "type":"button", "button": "cancel_lookup"}
+                Intermediary_Bot.sendmessage(user_id, payload)
+
             elif clicked_button == "cancel_deposit":
-                message_id = payload['message']['message_id']
-                Telegram.deletemessage(user_id, message_id)
 
                 message_payload = reformat_message(user_id, "😑 You have cancelled your balance deposit request!")
                 Telegram.sendmessage(message_payload)
 
             elif lookup_prices.get(clicked_button):
                 data_item = lookup_prices.get(clicked_button)
-
-                message_id = payload['message']['message_id']
-                Telegram.deletemessage(user_id, message_id)
 
                 user = Users.find_one({"id": user_id})
                 price = get_sale_price(clicked_button)
@@ -150,15 +246,16 @@ def process_message(payload):
                     Telegram.sendmessage(message_payload)
                 else:
                     # forward to other bot
-                    Local_Cache.set("last_lookup", clicked_button)
+                    Users.update_one({"id": user_id}, {"$set": {"last_lookup": clicked_button}})
                     payload = {"user_id": user_id, "type":"button", "button": clicked_button}
                     Intermediary_Bot.sendmessage(user_id, payload)
 
             else:
                 #send it to the other bot
-                payload = {"user_id":user_id, "type":"button", "data": clicked_button}
+
+                payload = {"user_id":user_id, "type":"button", "button": clicked_button}
                 Intermediary_Bot.sendmessage(user_id, payload)
 
     except Exception as e:
         print(e)
-
+        return

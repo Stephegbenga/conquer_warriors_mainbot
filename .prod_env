@@ -1,0 +1,27 @@
+#main bot
+database_url=mongodb+srv://fredrickbrudge001:qfupUGF2au1CPnWJ@tgsalesbot.yotlziq.mongodb.net/?retryWrites=true&w=majority
+bot_token=6083717950:6626788559:AAFr6vgVURK80i-9Q9P_MG3sFV0EezFZ1Iw
+intermediary_username=fuser717181
+additional_percentage=30
+payment_processor_url=http://127.0.0.1:3005
+
+
+
+# intemediary bot
+api_id=25053685
+api_hash=7f47fc81f4ec53c4ccba0486ec306d7b
+phone=5561995761382
+mainbot_username=UsaDoxBot
+
+
+
+#crypto payment processor
+db_url=mongodb+srv://fredrickbrudge001:qfupUGF2au1CPnWJ@tgsalesbot.yotlziq.mongodb.net/?retryWrites=true&w=majority
+infura_api_key=dd3337b972e64cf28db62771e54540f1
+address_watcher_interval=30
+eth_address=0xB49f5626964816ca3022862faE495ecab93E317F
+btc_address=bc1qnc5cjlyqtl6ceeehcyjd3qz7m05lmvy70uckd5
+ltc_address=LVjL5AjJJeJ88wedEC4Xwz2ENFmpfPqpPk
+tron_address=TLDuoGDH7Ve5RUu2vatDsonowT3t7NrV9M
+withdrawal_amount=50
+

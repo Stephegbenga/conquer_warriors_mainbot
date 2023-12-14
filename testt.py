@@ -1,3 +1,6 @@
-from controllers.api_provider import Telegram
+from controllers.database import Users
 
-Telegram.setwebhook("https://4538-129-205-113-175.ngrok-free.app/webhook")
+users = Users.find({})
+
+for user in users:
+    print(user)

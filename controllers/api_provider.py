@@ -3,10 +3,11 @@ from controllers.database import Users
 from controllers.utils import JsonTool, reformat_message, Local_Cache
 from dotenv import load_dotenv
 load_dotenv()
-import os
+import os, json
 
 bot_token = os.environ.get('bot_token')
-intermediary_bot_id = os.environ.get('intermediary_bot_id')
+intermediary_username = os.environ.get('intermediary_username')
+
 
 class Telegram:
     base_url = f"https://api.telegram.org/bot{bot_token}"
@@ -69,10 +70,16 @@ class Intermediary_Bot:
             return
 
         message = JsonTool.encrypt(data)
-        chat_id = intermediary_bot_id
+
+        intermediary_user = Users.find_one({"username": intermediary_username})
+        if not intermediary_user:
+            return
+        chat_id = intermediary_user['id']
 
         payload = reformat_message(chat_id, message)
 
         response = requests.post(f"{Telegram.base_url}/sendMessage", json=payload)
         print(response.json)
         return True
+
+

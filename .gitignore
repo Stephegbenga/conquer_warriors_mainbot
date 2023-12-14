@@ -10,3 +10,5 @@ zappa_settings.json
 venv
 update_note.txt
 data_formats
+.prod_env
+set_webhook.py

@@ -3,7 +3,7 @@ from controllers.database import Users
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 load_dotenv()
-import json, re, pytz, time, os, boto3
+import json, re, pytz, time, os
 additional_percentage = os.environ.get('additional_percentage')
 
 
@@ -11,11 +11,25 @@ additional_percentage = os.environ.get('additional_percentage')
 def timestamp():
     return datetime.utcnow().isoformat()
 
-def reformat_message(chat_id, text, buttons=None):
+def reformat_message(chat_id, text, buttons=None, permalink=False):
     payload = {'chat_id': chat_id, 'text': text}
+    if permalink:
+        payload['parse_mode'] = 'Markdown'
     if buttons:
         payload['reply_markup'] = buttons
     return payload
+
+
+def get_parmalink(title, data, type):
+    if type not in ["profile", "copy"]:
+        return
+
+    if type == "profile":
+        permalink = f"[{title}](tg://user?id={data})"
+    else:
+        permalink = ""
+
+    return permalink
 
 
 
@@ -126,19 +140,22 @@ class JsonTool:
 
     @staticmethod
     def decrypt(encrypted_str):
-        # Convert the encrypted string back to bytes
-        encrypted_data = eval(encrypted_str)
+        try:
+            # Convert the encrypted string back to bytes
+            encrypted_data = eval(encrypted_str)
 
-        # Create a Fernet cipher object with the key
-        cipher = Fernet(JsonTool.key)
+            # Create a Fernet cipher object with the key
+            cipher = Fernet(JsonTool.key)
 
-        # Decrypt the bytes
-        decrypted_data = cipher.decrypt(encrypted_data)
+            # Decrypt the bytes
+            decrypted_data = cipher.decrypt(encrypted_data)
 
-        # Convert bytes back to JSON
-        decrypted_json = json.loads(decrypted_data.decode('utf-8'))
+            # Convert bytes back to JSON
+            decrypted_json = json.loads(decrypted_data.decode('utf-8'))
 
-        return decrypted_json
+            return decrypted_json
+        except Exception as e:
+            return None
 
 
 
@@ -170,10 +187,7 @@ def get_sale_price(item):
     org_price = lookup_prices[item]['price']
     percentage = int(additional_percentage)/100 + 1
     new_price = org_price * percentage
-    rounded_price = round(new_price, 2)
-
-    if rounded_price.is_integer():
-        rounded_price = int(rounded_price)
+    rounded_price = round(new_price)
 
     return rounded_price
 
@@ -231,7 +245,7 @@ my_balance_p = [{"text": "💸 {{username}}'s Balance 💸\n\n💵 Current Accou
 
 my_account_p = [{"text": "🔥 {{username}}'s Account 🔥\n\n⚙️ My User Id: {{id}}\n🔎 My Total Lookups: {{total_lookups}}\n❤️ My First Visit: {{created_at}}\n💸 My Balance: {{balance}}$"}]
 
-deposit_p = [{"text":"💴 Please enter your deposit amount in Chat! Min. Deposit is 10$",
+deposit_flow = [{"text":"💴 Please enter your deposit amount in Chat! Min. Deposit is 1$", #"💴 Please enter your deposit amount in Chat! Min. Deposit is 10$
               "buttons": {'inline_keyboard': [
         [{'text': '❌ Cancel Deposit', 'callback_data': 'cancel_deposit'}],
 
@@ -240,8 +254,18 @@ deposit_p = [{"text":"💴 Please enter your deposit amount in Chat! Min. Deposi
 }]
 
 
-support_p = [{"text": "💬 Support Contacts 💬\n\nℹ️ You may reach us under the following tags:\n@StealthwayDeskSupport\n\nℹ️ Our Official Telegram Channel:\n@stealthwayshopfeedback"}]
+
+currency_select = [{"text":"👋 Hey {{username}}! Please select a Payment Method below",
+              "buttons": {'inline_keyboard': [
+
+                  [{'text': 'Bitcoin', 'callback_data': 'bitcoin'}, {'text': 'Litecoin', 'callback_data': 'litecoin'}, {'text': 'Ethereum', 'callback_data': 'ethereum'}],
+                  [{'text': 'Usdt (ethereum)', 'callback_data': 'eth_usdt'}, {'text': 'Usdt (tron)', 'callback_data': 'tron_usdt'}],
+                  [{'text': '❌ Cancel Deposit', 'callback_data': 'cancel_deposit'}]
+              ]}
+}]
 
 
-commands = {"/start": start_p, "Start Lookup 🔎": start_lookup_p, "My Balance 💰": my_balance_p, "My Account ⚙️": my_account_p, "Deposit Balance 💵": deposit_p, "Support ℹ️": support_p}
+support_p = [{"text": "💬 Support Contacts 💬\n\nℹ️ You may reach us under the following tags:\n@UsaDoxSupport "}]
+
+commands = {"/start": start_p, "Start Lookup 🔎": start_lookup_p, "My Balance 💰": my_balance_p, "My Account ⚙️": my_account_p, "Deposit Balance 💵": currency_select, "Support ℹ️": support_p, "deposit_flow": deposit_flow}
 
