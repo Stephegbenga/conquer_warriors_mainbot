@@ -57,5 +57,5 @@ def coinbase_webhook():
 
 
 if __name__ == '__main__':
-    app.run(port=4000)
+    app.run()
 
