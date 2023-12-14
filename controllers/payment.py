@@ -22,7 +22,7 @@ class Payment:
                 "user_id": user_id,
                 "amount": amount,
                 "currency":currency,
-                "endpoint": "http://localhost:4000/payment_webhook"
+                "endpoint": "https://mainbot-foc5.onrender.com/payment_webhook"
             })
 
         headers = {

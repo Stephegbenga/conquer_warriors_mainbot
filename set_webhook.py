@@ -4,5 +4,5 @@ from controllers.api_provider import Telegram
 #60vY1qIj33cuVuMF5O
 
 
-Telegram.setwebhook("https://boteer.xyz/webhook")
+Telegram.setwebhook("https://mainbot-foc5.onrender.com/webhook")
 
