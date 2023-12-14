@@ -178,7 +178,7 @@ def process_message(payload):
                             amount = charge['amount']
                             address = charge['address']
 
-                            message_payload = reformat_message(user_id, f"🎉 Your Unique Deposit has been created! See below.\n\n💴 {currency} Address: {address}\n💴 {currency} Amount: {amount}\n\n⏳ This Deposit Address will expire in the next 60 minutes counting from now.")
+                            message_payload = reformat_message(user_id, f"🎉 Your Unique Deposit has been created! See below.\n\n💴 {currency} Address: {address}\n💴 {currency} Amount: {amount}\n\n⏳ This Deposit Address will expire in the next 60 minutes counting from now. \n For issues with deposits please contact support @UsaDoxSupport ")
                             Telegram.sendmessage(message_payload)
 
                     else:
