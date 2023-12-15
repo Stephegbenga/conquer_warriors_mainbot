@@ -56,6 +56,23 @@ def coinbase_webhook():
     return {"status":"success", "message":"transaction recieved"}
 
 
+
+
+
+@app.get("/mock_webhook")
+def mock_webhook():
+    req = {"user_id": 6626788559, "amount": 20, "address":"0x0w993skks88j383838838383", "currency":"Eth usdt"}
+
+    user_id = req['user_id']
+    amount = req['amount']
+    user_link = get_parmalink(user_id, user_id, "profile")
+    notification_message = f"user named {user_link} deposited {str(amount)}$ \n\naddress: {req['address']} \ncurrency: {req['currency']}"
+    notification_message = reformat_message(notification_telegram_id, notification_message, permalink=True)
+    Telegram.sendmessage(notification_message)
+
+
+
+
 if __name__ == '__main__':
     app.run()
 
