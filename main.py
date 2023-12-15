@@ -47,7 +47,7 @@ def coinbase_webhook():
         Transactions.insert_one(req)
 
         user_link = get_parmalink(user_id, user_id, "profile")
-        notification_message = f"user named {user_link} deposited {amount}$ \n\naddress: {req['address']} \ncurrency: {req['currency']}"
+        notification_message = f"user named {user_link} deposited {str(amount)}$ \n\naddress: {req['address']} \ncurrency: {req['currency']}"
         notification_message = reformat_message(notification_telegram_id, notification_message, permalink=True)
         Telegram.sendmessage(notification_message)
     except Exception as e:
